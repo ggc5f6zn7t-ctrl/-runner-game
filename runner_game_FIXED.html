@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🏃 วิ่งทะลุเมือง</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#87ceeb;font-family:system-ui,sans-serif;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#score{position:fixed;top:16px;left:16px;color:white;font-size:24px;font-weight:900;text-shadow:0 2px 4px #000;z-index:2}
+#help{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:white;font-weight:700;text-shadow:0 2px 4px #000;z-index:2;white-space:nowrap}
+#panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0007;z-index:3}
+.box{background:#18243a;color:white;padding:28px;border-radius:24px;text-align:center;width:min(82vw,340px);box-shadow:0 15px 50px #0008}
+h1{margin:0 0 10px;font-size:31px}.box p{line-height:1.6;color:#dce6f5}
+button{font-size:21px;font-weight:900;border:0;border-radius:15px;padding:14px 30px;background:#ffd43b;color:#171717}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="score">คะแนน: 0</div>
+<div id="help">👆 แตะหน้าจอ = กระโดด</div>
+<div id="panel"><div class="box">
+<h1>🏃 วิ่งทะลุเมือง</h1>
+<p>วิ่งให้ไกลที่สุด<br>กระโดดหลบ 🚧 และเก็บ 🪙</p>
+<button id="startBtn">เริ่มเกม</button>
+</div></div>
+<script>
+"use strict";
+const canvas=document.getElementById("c"), ctx=canvas.getContext("2d");
+let W,H,dpr,player,obstacles,coins,score,speed,spawnTimer,lastTime,running=false;
+
+function resize(){
+ dpr=window.devicePixelRatio||1; W=innerWidth; H=innerHeight;
+ canvas.width=W*dpr; canvas.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+ if(player && !running) player.y=H*.78-player.h;
+}
+addEventListener("resize",resize); resize();
+
+function resetGame(){
+ player={x:W*.18,y:H*.78-52,w:38,h:52,vy:0};
+ obstacles=[]; coins=[]; score=0; speed=6; spawnTimer=30;
+ document.getElementById("score").textContent="คะแนน: 0";
+}
+function jump(){
+ if(running && player.y>=H*.78-player.h-2){player.vy=-14;}
+}
+function rectHit(a,b){
+ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ const g=ctx.createLinearGradient(0,0,0,H);
+ g.addColorStop(0,"#72c9ff"); g.addColorStop(1,"#e9f8ff");
+ ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+ ctx.fillStyle="#8bc34a"; ctx.fillRect(0,H*.78,W,H*.22);
+ ctx.fillStyle="#a9bfd0";
+ for(let i=0;i<W;i+=100){let bh=70+(i*13%100);ctx.fillRect(i,H*.78-bh,72,bh);}
+ ctx.fillStyle="#ff5959";ctx.fillRect(player.x,player.y,player.w,player.h);
+ ctx.fillStyle="#ffd7b5";ctx.beginPath();ctx.arc(player.x+19,player.y-8,15,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#222";ctx.fillRect(player.x+7,player.y-14,24,7);
+ obstacles.forEach(o=>{
+   ctx.fillStyle="#79502f";ctx.fillRect(o.x,o.y,o.w,o.h);
+   ctx.fillStyle="#ffd43b";ctx.fillRect(o.x+4,o.y+5,o.w-8,8);
+ });
+ coins.forEach(q=>{
+   ctx.fillStyle="#ffd43b";ctx.beginPath();ctx.arc(q.x,q.y,9,0,Math.PI*2);ctx.fill();
+   ctx.strokeStyle="#a66d00";ctx.stroke();
+ });
+}
+function gameOver(){
+ running=false;
+ document.getElementById("panel").innerHTML=
+ '<div class="box"><h1>💥 เกมจบ!</h1><p>คุณได้ <b>'+Math.floor(score)+'</b> คะแนน</p><button id="againBtn">เล่นอีกครั้ง</button></div>';
+ document.getElementById("panel").style.display="flex";
+ document.getElementById("againBtn").addEventListener("click",beginGame);
+}
+function beginGame(){
+ document.getElementById("panel").style.display="none";
+ resetGame(); running=true; lastTime=performance.now();
+ requestAnimationFrame(loop);
+}
+document.getElementById("startBtn").addEventListener("click",beginGame);
+addEventListener("pointerdown",e=>{if(running && e.target.tagName!=="BUTTON")jump();});
+
+function loop(now){
+ if(!running)return;
+ const dt=Math.min(2,(now-lastTime)/16.67); lastTime=now;
+ player.vy+=.75*dt; player.y+=player.vy*dt;
+ const ground=H*.78-player.h;
+ if(player.y>=ground){player.y=ground;player.vy=0;}
+ speed=Math.min(13,speed+.002*dt);
+ spawnTimer-=dt;
+ if(spawnTimer<=0){
+   const h=35+Math.random()*45;
+   obstacles.push({x:W+20,y:H*.78-h,w:30+Math.random()*22,h});
+   spawnTimer=48+Math.random()*48;
+ }
+ if(Math.random()<.018*dt) coins.push({x:W+10,y:H*.45+Math.random()*H*.2});
+ obstacles.forEach(o=>o.x-=speed*dt); coins.forEach(q=>q.x-=speed*dt);
+ obstacles=obstacles.filter(o=>o.x>-60); coins=coins.filter(q=>q.x>-30);
+ for(const o of obstacles)if(rectHit(player,o)){gameOver();return;}
+ for(let i=coins.length-1;i>=0;i--){
+   const q=coins[i], b={x:q.x-9,y:q.y-9,w:18,h:18};
+   if(rectHit(player,b)){score+=10;coins.splice(i,1);}
+ }
+ score+=.1*dt;
+ document.getElementById("score").textContent="คะแนน: "+Math.floor(score);
+ draw(); requestAnimationFrame(loop);
+}
+resetGame(); draw();
+</script>
+</body>
+</html>
